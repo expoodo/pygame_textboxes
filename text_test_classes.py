@@ -59,6 +59,8 @@ class TextSurface(pygame.sprite.Sprite):
                     self.text = self.text + event.unicode
 
                 # update screen
+                pygame.draw.line(  # draw cursor when key pressed
+                    self.screen, self.cursor_colour, self.rect.topright, self.rect.bottomright, self.cursor_width)
                 self.surface = self.font.render(self.text, self.aa, self.text_color)
                 self.rect = self.surface.get_rect()
 
