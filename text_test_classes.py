@@ -64,4 +64,4 @@ class TextSurface(pygame.sprite.Sprite):
 
 
 if __name__ == "__main__":
-    print(1.1 + 3.3 == 4.4)
+    print("changed")
