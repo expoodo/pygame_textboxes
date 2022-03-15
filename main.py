@@ -12,7 +12,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE
 pygame.display.set_caption("not sure")
 pygame.key.set_repeat(500, 50)
 
-textbox = textsurfaces.TextLine("", None, 40, (255, 255, 255))
+textbox = textsurfaces.TextLine("lol", None, 40, (255, 255, 255))
 
 while running:
     events = pygame.event.get()
