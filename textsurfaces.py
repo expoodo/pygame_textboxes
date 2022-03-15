@@ -53,11 +53,14 @@ class TextLine(pygame.sprite.Sprite):
             self._update_requested = False
             print(f"updating surface {pygame.time.get_ticks()}")
 
-    def update(self, events):
-        # check if CursorManager properties have been changed
+    def check_for_cursor_changes(self):
+        """check if `self.cursor` properties have been changed"""
         if self.cursor.property_changed:
             self.cursor.property_changed = False
             self.request_update()
+
+    def update(self, events):
+        self.check_for_cursor_changes()
 
         if self._is_focused:
             for event in events:
@@ -106,9 +109,28 @@ class CursorManager:
         self._visible = True
         self.property_changed = False
 
+        self._left_text = ""
+
     def alert_change(self):
         """change _property_changed variable to True when a property is changed"""
         self.property_changed = True
+
+    def move_cursor_left(self):
+        """move cursor to the left only if cursor position is not 0"""
+        if self._position > 0:
+            self._position -= 1
+
+    def move_cursor_right(self, text: str):
+        """move cursor to the right only if cursor pos is not at the end of the provided text"""
+        if self._position != len(text):
+            self._position += 1
+
+    def get_split_text(self, text: str):
+        """return the left and right substrings around the cursor position"""
+        left_text = text[:self._position]
+        right_text = text[self._position:]
+
+        return left_text, right_text
 
     @property
     def width(self):
@@ -146,3 +168,8 @@ class CursorManager:
         self._blink_interval_ms = value
         self.alert_change()
 
+
+if __name__ == "__main__":
+    foo = CursorManager((255, 255, 255))
+
+    print("lolguys"[:2])
