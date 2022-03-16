@@ -27,6 +27,7 @@ while running:
 
     textbox.update(events)
     screen.blit(textbox.surface, (10, 10))
+    textbox.enabled = False
 
     clock.tick(120)
     pygame.display.flip()
