@@ -30,9 +30,8 @@ class TextLine(pygame.sprite.Sprite):
         self._left_text, self._right_text = self.cursor.get_split_text(self.text)
         self._left_text_size = self._font.size(self._left_text)
         self._right_text_size = self._font.size(self._right_text)
-
-        self._enabled = True
         self.is_focused = True
+        self.enabled = True
 
         self._request_update()
         super().__init__()
@@ -44,7 +43,6 @@ class TextLine(pygame.sprite.Sprite):
     def _update_surface(self):
         """update surface and make surface larger to fit in the cursor (only if it is requested)"""
         if self._update_requested:
-            print("ayayaya")
             text_surface = self._font.render(self._text, self._antialias, self._colour)
             background_surface = pygame.Surface((text_surface.get_width() + self.cursor.width,
                                                  text_surface.get_height()))
@@ -162,10 +160,8 @@ class TextLine(pygame.sprite.Sprite):
 
     @enabled.setter
     def enabled(self, value: bool):
-        self._is_focused = value
-        if value != self.cursor.enabled:  # prevent spamming of surface updates
-            self.cursor.enabled = value
-            self._request_update()
+        self._enabled = value
+        self.enabled = value
 
 
 class CursorManager:
