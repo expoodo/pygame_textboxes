@@ -17,7 +17,7 @@ def separate_words(text: str, return_len_values: bool = False, custom_separators
     # make element have all non-alphanumeric characters as separators if it is None or ''
     custom_separators = ["^\w\W" if s is None or s == "" else s for s in custom_separators]
 
-    split_string = re.findall(fr"\w+(?:(?<=\d)[{custom_separators[1]}]?\d+|[{custom_separators[0]}]?\w*)+\W*", text)
+    split_string = re.findall(fr"\w+(?:(?<=\d)[{custom_separators[1]}]?\d+|[{custom_separators[0]}]?\w*)+\W*|\W+", text)
 
     if return_len_values:
         split_string = [len(element) for element in split_string]
@@ -116,6 +116,7 @@ class TextLine(pygame.sprite.Sprite):
                         if len(self.left_text) != 0:
                             if pressed_keys[pygame.K_LCTRL] or pressed_keys[pygame.K_RCTRL]:  # delete words
                                 split_string = separate_words(self.left_text, True)
+
                                 self.left_text = self.left_text[:-split_string[-1]]
                             else:
                                 self.left_text = self.left_text[:-1]
@@ -425,6 +426,4 @@ class CursorManager:
 
 
 if __name__ == "__main__":
-    foo = CursorManager((255, 255, 255))
-
-    print("lolguys"[:2])
+    print(separate_words("lol"))
