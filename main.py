@@ -12,7 +12,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE
 pygame.display.set_caption("not sure")
 pygame.key.set_repeat(500, 50)
 
-textbox = textsurfaces.TextLine("lol", None, 40, (255, 255, 255))
+textbox = textsurfaces.TextLine("lol", None, 40, (255, 255, 255), True)
 
 while running:
     events = pygame.event.get()
@@ -22,6 +22,8 @@ while running:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
+            elif event.key == pygame.K_F1:
+                textbox.is_focused = not textbox.is_focused
         elif event.type == pygame.QUIT:
             running = False
 

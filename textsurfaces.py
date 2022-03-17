@@ -1,4 +1,28 @@
 import pygame
+import re
+import pyperclip
+
+
+def separate_words(text: str, return_len_values: bool = False, custom_separators: tuple | list = ("':", ";,.")):
+    """
+    Returns a list of the separated words in a string. A word is defined as a substring surrounded by separator. All
+    non-alphanumeric characters are separators except `;,.` for substrings that end with digits, and `':` for words.
+    :param text: String to be modified
+    :param custom_separators: Custom separators. 1st element are for words, 2nd are for digits. Each element is a string
+    with all the characters inside. Custom characters will overwrite the default values of `':` and `;,.`
+    :param return_len_values: Changes each element (word) into its length of characters (default value is False)
+    :return: Returns list of every word with its separators on the right if there are any
+    """
+
+    # make element have all non-alphanumeric characters as separators if it is None or ''
+    custom_separators = ["^\w\W" if s is None or s == "" else s for s in custom_separators]
+
+    split_string = re.findall(fr"\w+(?:(?<=\d)[{custom_separators[1]}]?\d+|[{custom_separators[0]}]?\w*)+\W*", text)
+
+    if return_len_values:
+        split_string = [len(element) for element in split_string]
+
+    return split_string
 
 
 class TextLine(pygame.sprite.Sprite):
@@ -12,26 +36,32 @@ class TextLine(pygame.sprite.Sprite):
     :param size: Size of the font (in pixels)
     :param colour: Colour of the text
     :param antialias: Antialiasing for the text (default is True)
+    :param text_background: colour of the text background (default is None)
+    :param bold: Bool if font is bold or not
+    :param italic: Bool if font is italicized or not
     """
 
-    def __init__(self, text, font, size, colour, antialias=True):
+    def __init__(self, text, font, size, colour, antialias=True, text_background=None, bold=False, italic=False):
         self._text = text
         self._antialias = antialias
         self._colour = colour
         self._font_file = font
         self._font_size = size
+        self._text_background = text_background
+        self._bold = bold
+        self._italic = italic
 
-        self._font = pygame.font.SysFont(self._font_file, self._font_size)
-        self._surface = self._font.render(self._text, self._antialias, self._colour)
+        self._font = pygame.font.SysFont(self._font_file, self._font_size, self._bold, self._italic)
+        self._surface = self._font.render(self._text, self._antialias, self._colour, self._text_background)
         self._rect = self._surface.get_rect()
         self._update_requested = False
 
-        self.cursor = CursorManager(self._colour)
-        self._left_text, self._right_text = self.cursor.get_split_text(self.text)
+        self.cursor = CursorManager(self._text, self._colour)
+        self._left_text, self._right_text = self.cursor.get_split_text()
         self._left_text_size = self._font.size(self._left_text)
-        self._right_text_size = self._font.size(self._right_text)
+        self._right_text_size = self._font.size(self._right_text)  # GOAL: MAKE CURSOR ITALICIZED (TILTED) WHEN FONT IS
+        # also try to prevent surface update spamming when attributes are changed
         self.is_focused = True
-        self.enabled = True
 
         self._request_update()
         super().__init__()
@@ -43,7 +73,7 @@ class TextLine(pygame.sprite.Sprite):
     def _update_surface(self):
         """update surface and make surface larger to fit in the cursor (only if it is requested)"""
         if self._update_requested:
-            text_surface = self._font.render(self._text, self._antialias, self._colour)
+            text_surface = self._font.render(self._text, self._antialias, self._colour, self._text_background)
             background_surface = pygame.Surface((text_surface.get_width() + self.cursor.width,
                                                  text_surface.get_height()))
 
@@ -53,10 +83,9 @@ class TextLine(pygame.sprite.Sprite):
 
             if self.cursor.visible and self.cursor.enabled:
                 # update left and right substrings around cursor and fill the cursor into the surface
-                self._left_text, self._right_text = self.cursor.get_split_text(self.text)
+                self._left_text, self._right_text = self.cursor.get_split_text()
                 self._left_text_size = self._font.size(self._left_text)
                 self._right_text_size = self._font.size(self._right_text)
-                # print("updating")
 
                 cursor_size = (self.cursor.width, self._surface.get_height())
                 cursor_pos = (self._left_text_size[0], self._rect.top)
@@ -73,33 +102,37 @@ class TextLine(pygame.sprite.Sprite):
 
     def update(self, events):
         """check for key events and update surface/cursor if it is requested"""
-        if self.enabled:
-            self._update_surface()
+        self._update_surface()
 
-            if self.is_focused:
-                self._check_for_cursor_changes()
-                self.cursor.blink()
+        if self.is_focused:
+            self._check_for_cursor_changes()
+            self.cursor.blink()
 
-                for event in events:
-                    if event.type == pygame.KEYDOWN:
-                        pressed_keys = pygame.key.get_pressed()
+            for event in events:
+                if event.type == pygame.KEYDOWN:
+                    pressed_keys = pygame.key.get_pressed()
 
-                        if pressed_keys[pygame.K_BACKSPACE]:
-                            self.left_text = self.left_text[:-1]
+                    if pressed_keys[pygame.K_BACKSPACE]:
+                        if len(self.left_text) != 0:
+                            if pressed_keys[pygame.K_LCTRL] or pressed_keys[pygame.K_RCTRL]:  # delete words
+                                split_string = separate_words(self.left_text, True)
+                                self.left_text = self.left_text[:-split_string[-1]]
+                            else:
+                                self.left_text = self.left_text[:-1]
                             self.cursor.override_cursor_visibility(True)
 
-                        elif pressed_keys[pygame.K_RIGHT]:
-                            self.cursor.move_cursor_right(self.text)
-                            self.cursor.override_cursor_visibility(True)
+                    elif pressed_keys[pygame.K_RIGHT]:
+                        self.cursor.move_cursor_right()
+                        self.cursor.override_cursor_visibility(True)
 
-                        elif pressed_keys[pygame.K_LEFT]:
-                            self.cursor.move_cursor_left()
-                            self.cursor.override_cursor_visibility(True)
+                    elif pressed_keys[pygame.K_LEFT]:
+                        self.cursor.move_cursor_left()
+                        self.cursor.override_cursor_visibility(True)
 
-                        else:
-                            if len(event.unicode) != 0:  # prevent non character inputs from updating surface
-                                self.left_text += event.unicode
-                                self.cursor.override_cursor_visibility(True)
+                    else:
+                        if len(event.unicode) != 0:  # prevent non character inputs from updating surface
+                            self.left_text += event.unicode
+                            self.cursor.override_cursor_visibility(True)
 
     def _update_text(self):
         """update `self.text` property by combining the left and right text of the cursor"""
@@ -111,7 +144,9 @@ class TextLine(pygame.sprite.Sprite):
 
     @text.setter
     def text(self, value: str):
+        """update screen to display changed text and also update CursorManager's version of the text"""
         self._text = value
+        self.cursor._text = value
         self._request_update()
 
     @property
@@ -149,33 +184,111 @@ class TextLine(pygame.sprite.Sprite):
 
     @is_focused.setter
     def is_focused(self, value: bool):
+        """
+        disable cursor and input to object when False, (though still listen for property changes). Make cursor
+        visible when object is focused
+        """
         self._is_focused = value
-        if value != self.cursor.enabled:  # prevent spamming of surface updates
-            self.cursor.enabled = value
-            self._request_update()
+        self.cursor.enabled = value
+        self.cursor.override_cursor_visibility(value)
+        self._request_update()
 
     @property
-    def enabled(self):
-        return self._enabled
+    def font(self):
+        return self._font
 
-    @enabled.setter
-    def enabled(self, value: bool):
-        self._enabled = value
-        self.enabled = value
+    @font.setter
+    def font(self, value):
+        self._font = value
+        self._request_update()
+
+    @property
+    def antialias(self):
+        return self._antialias
+
+    @antialias.setter
+    def antialias(self, value: bool):
+        self._antialias = value
+        self._request_update()
+
+    @property
+    def colour(self):
+        return self._colour
+
+    @colour.setter
+    def colour(self, value: (int, int, int)):
+        self._colour = value
+        self._request_update()
+
+    @property
+    def text_background(self):
+        return self._text_background
+
+    @text_background.setter
+    def text_background(self, value: (int, int, int)):
+        self._text_background = value
+        self._request_update()
+
+    @property
+    def rect(self):
+        return self._rect
+
+    @rect.setter
+    def rect(self, value: pygame.Rect):
+        self._rect = value
+        self._request_update()
+
+    @property
+    def font_file(self):
+        return self._font_file
+
+    @font_file.setter
+    def font_file(self, value: str):
+        self._font_file = value
+        self.font = pygame.font.SysFont(self._font_file, self._font_size)
+
+    @property
+    def font_size(self):
+        return self._font_size
+
+    @font_size.setter
+    def font_size(self, value: int):
+        self._font_size = value
+        self.font = pygame.font.SysFont(self._font_file, self._font_size, self._bold, self._italic)
+
+    @property
+    def bold(self):
+        return self._bold
+
+    @bold.setter
+    def bold(self, value: bool):
+        self._bold = value
+        self.font.set_bold(value)
+
+    @property
+    def italic(self):
+        return self._italic
+
+    @italic.setter
+    def italic(self, value: bool):
+        self._italic = value
+        self.font.set_italic(value)
 
 
 class CursorManager:
     """
     Class for holding cursor settings and manipulation methods.
 
+    :param text: the text that the cursor will be based on
     :param colour: colour of the text
     :param position: position of the cursor corresponding to the position of characters in the text (default value is
-    99999). position 0 means the cursor is on the left of the leftmost cursor.
+    the length of the text). position 0 means the cursor is on the left of the leftmost cursor.
     """
 
-    def __init__(self, colour: (int, int, int), position: int = 99999):
+    def __init__(self, text, colour: (int, int, int), position: int = None):
         self._colour = colour
-        self._position = position
+        self._text = text
+        self._position = len(self._text) if position is None else position
         self._width = 1
         self._blink_interval = 500
         self._time_visible = 500
@@ -194,22 +307,22 @@ class CursorManager:
         if self.position > 0:
             self.position -= 1
 
-    def move_cursor_right(self, text: str):
+    def move_cursor_right(self):
         """move cursor to the right only if cursor pos is not at the end of the provided text"""
-        if self.position != len(text):
+        if self.position != len(self._text):
             self.position += 1
 
-    def get_split_text(self, text: str):
+    def get_split_text(self):
         """return the left and right substrings around the cursor position"""
-        left_text = text[:self.position]
-        right_text = text[self.position:]
+        left_text = self._text[:self.position]
+        right_text = self._text[self.position:]
 
         return left_text, right_text
 
     def override_cursor_visibility(self, visible: bool):
         """override `blink()` to make cursor visible (which will be visible for the time specified in `_time_visible`"""
         if visible:
-            self._previous_tick_visible = pygame.time.get_ticks() - self.blink_interval
+            self._previous_tick_visible = pygame.time.get_ticks() - self._blink_interval
         else:
             self._previous_tick_visible = pygame.time.get_ticks()
 
@@ -299,6 +412,15 @@ class CursorManager:
     @enabled.setter
     def enabled(self, value: bool):
         self._enabled = value
+        self.alert_change()
+
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, value: str):
+        self._text = value
         self.alert_change()
 
 
