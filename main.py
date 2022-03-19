@@ -12,7 +12,9 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE
 pygame.display.set_caption("not sure")
 pygame.key.set_repeat(500, 50)
 
-textbox = textsurfaces.TextLine("lol", None, 40, (255, 255, 255), True)
+textbox = textsurfaces.TextLine("lol", "impact", 40, (255, 255, 255), True)
+
+textbox.text_background = (255, 0, 0)
 
 while running:
     events = pygame.event.get()
@@ -23,12 +25,12 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 running = False
             elif event.key == pygame.K_F1:
-                textbox.is_focused = not textbox.is_focused
+                textbox.italic = not textbox.italic
         elif event.type == pygame.QUIT:
             running = False
 
     textbox.update(events)
     screen.blit(textbox.surface, (10, 10))
 
-    clock.tick(120)
+    clock.tick()
     pygame.display.flip()

@@ -1,6 +1,7 @@
 import pygame
 import re
 import pyperclip
+import math
 
 
 def separate_words(text: str, return_len_values: bool = False, custom_separators: tuple | list = ("':", ";,.")):
@@ -54,13 +55,13 @@ class TextLine(pygame.sprite.Sprite):
         self._font = pygame.font.SysFont(self._font_file, self._font_size, self._bold, self._italic)
         self._surface = self._font.render(self._text, self._antialias, self._colour, self._text_background)
         self._rect = self._surface.get_rect()
+        self._true_rect = self._surface.get_rect()
         self._update_requested = False
 
         self.cursor = CursorManager(self._text, self._colour)
         self._left_text, self._right_text = self.cursor.get_split_text()
         self._left_text_size = self._font.size(self._left_text)
         self._right_text_size = self._font.size(self._right_text)  # GOAL: MAKE CURSOR ITALICIZED (TILTED) WHEN FONT IS
-        # also try to prevent surface update spamming when attributes are changed
         self.is_focused = True
 
         self._request_update()
@@ -73,23 +74,77 @@ class TextLine(pygame.sprite.Sprite):
     def _update_surface(self):
         """update surface and make surface larger to fit in the cursor (only if it is requested)"""
         if self._update_requested:
-            text_surface = self._font.render(self._text, self._antialias, self._colour, self._text_background)
-            background_surface = pygame.Surface((text_surface.get_width() + self.cursor.width,
-                                                 text_surface.get_height()))
+            # prevent surface from updating two times unnecessarily when text is italic and cursor is visible
+            if not self.italic or self.italic and not (self.cursor.visible and self.cursor.enabled):
+                text_surface = self._font.render(self._text, self._antialias, self._colour, self._text_background)
 
-            self._surface = background_surface
-            self._surface.blit(text_surface, (1, 0))
-            self._rect = self._surface.get_rect()
+                if self.italic:  # make background surface bigger to fit in tilted cursor
+                    background_surface = pygame.Surface((text_surface.get_width() + self.cursor.italic_width,
+                                                         text_surface.get_height()))
+                else:
+                    background_surface = pygame.Surface((text_surface.get_width(),
+                                                         text_surface.get_height()))
+
+                self._surface = background_surface
+
+                if self.italic:
+                    self._surface.blit(text_surface, (self.cursor.italic_width, 0))
+                else:
+                    self._surface.blit(text_surface, (0, 0))
+
+                self._rect = self._surface.get_rect()
 
             if self.cursor.visible and self.cursor.enabled:
-                # update left and right substrings around cursor and fill the cursor into the surface
+                # update left and right substrings around cursor and blit cursor surface onto main surface
                 self._left_text, self._right_text = self.cursor.get_split_text()
                 self._left_text_size = self._font.size(self._left_text)
                 self._right_text_size = self._font.size(self._right_text)
 
                 cursor_size = (self.cursor.width, self._surface.get_height())
-                cursor_pos = (self._left_text_size[0], self._rect.top)
-                self._surface.fill(self.cursor.colour, (cursor_pos, cursor_size))
+                cursor_surface = pygame.Surface(cursor_size).convert_alpha()
+
+                if self.cursor.position_is_max():  # make cursor position exactly on the edge of the surface
+                    cursor_pos = (self._left_text_size[0] - self.cursor.width, self._rect.top)
+                else:
+                    cursor_pos = (self._left_text_size[0], self._rect.top)
+
+                cursor_surface.fill(self.cursor.colour)
+
+                if not self.italic:
+                    self._surface.blit(cursor_surface, cursor_pos)
+                else:  # tilt cursor a bit and make surface bigger to make space for it when text is italic
+                    rotated_cursor = pygame.transform.rotate(cursor_surface, self.cursor.angle).convert_alpha()
+                    text_surface = self._font.render(self._text, self._antialias, self._colour, self._text_background)
+
+                    self.cursor.italic_width = rotated_cursor.get_width()
+                    # move cursor more to the right of a space to make the space look bigger
+                    if self.left_text[-1:] == " ":
+                        background_surface = pygame.Surface((text_surface.get_width() + self.cursor.italic_width*2,
+                                                             text_surface.get_height()))
+                        new_rect = rotated_cursor.get_rect(
+                            center=(
+                                (cursor_pos[0] - self.cursor.italic_width / 2 - 1) + self.cursor.italic_width * 2,
+                                cursor_pos[1] + self._rect.height / 2))
+                    elif self.cursor.position_is_min():  # move cursor to the left more when it is at pos 0
+                        background_surface = pygame.Surface((text_surface.get_width() + self.cursor.italic_width * 2,
+                                                             text_surface.get_height()))
+                        new_rect = rotated_cursor.get_rect(
+                            center=(
+                                (cursor_pos[0] - self.cursor.italic_width / 2 - 1) +
+                                self.cursor.italic_width * math.floor(2.5),
+                                cursor_pos[1] + self._rect.height / 2))
+                    else:
+                        background_surface = pygame.Surface((text_surface.get_width() + self.cursor.italic_width,
+                                                             text_surface.get_height()))
+                        new_rect = rotated_cursor.get_rect(
+                            center=(cursor_pos[0] - self.cursor.italic_width / 2 - 1 + self.cursor.italic_width,
+                                    cursor_pos[1] + self._rect.height / 2))
+
+                    self._surface = background_surface
+                    self._surface.blit(text_surface, (self.cursor.italic_width, 0))
+                    self._rect = self._surface.get_rect()
+
+                    self._surface.blit(rotated_cursor, new_rect)
 
             self._update_requested = False
             print(f"updating surface {pygame.time.get_ticks()}")
@@ -298,6 +353,8 @@ class CursorManager:
         self._property_changed = False
         self._previous_tick_visible = pygame.time.get_ticks()
         self._enabled = True
+        self._angle = -11
+        self._italic_width = 6
 
     def alert_change(self):
         """change _property_changed variable to True when a property is changed"""
@@ -345,6 +402,14 @@ class CursorManager:
                     self.visible = False
         else:
             self._visible = True
+
+    def position_is_max(self):
+        """returns True if the cursor position is at the end of the text"""
+        return True if self.position >= len(self._text) else False
+
+    def position_is_min(self):
+        """returns True if the cursor position is at the start of the text (position 0)"""
+        return True if self.position <= 0 else False
 
     @property
     def width(self):
@@ -424,6 +489,26 @@ class CursorManager:
         self._text = value
         self.alert_change()
 
+    @property
+    def angle(self):
+        return self._angle
+
+    @angle.setter
+    def angle(self, value: int):
+        self._angle = value
+        self.alert_change()
+
+    @property
+    def italic_width(self):
+        return self._italic_width
+
+    @italic_width.setter
+    def italic_width(self, value):
+        self._italic_width = value
+        self.alert_change()
+
 
 if __name__ == "__main__":
-    print(separate_words("lol"))
+    foo = ((20, 1), (10, 2), (6, 12), (16, 59))
+
+    print(pygame.math.Vector2(10, 10))
