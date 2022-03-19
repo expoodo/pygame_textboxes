@@ -130,3 +130,6 @@ dmypy.json
 
 #Pygame game loop
 .main.py
+
+#PyCharm files
+.idea
